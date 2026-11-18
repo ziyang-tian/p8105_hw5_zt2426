@@ -16,6 +16,7 @@ library(tidyverse)
 ```
 
 # Problem 1
+
 ```{r birthday-function}
 birthday_match <- function(n_people) {
   birthdays <- sample(1:365, size = n_people, replace = TRUE)
@@ -70,5 +71,88 @@ contain more pairs of people, which creates more opportunities
 for a shared birthday.
 
 # Problem 2
+
+```{r read-participant-files}
+participant_files <- tibble(
+  file_name = list.files("data", pattern = "\\.csv$")
+) %>%
+  mutate(
+    data = map(
+      file_name,
+      function(current_file) {
+        read_csv(
+          file.path("data", current_file),
+          show_col_types = FALSE
+        )
+      }
+    )
+  )
+
+participant_files
+```
+
+```{r tidy-study-data}
+study_tidy <- participant_files %>%
+  mutate(
+    participant_id = str_remove(file_name, "\\.csv$")
+  ) %>%
+  separate(
+    participant_id,
+    into = c("arm", "subject_id"),
+    sep = "_",
+    remove = FALSE
+  ) %>%
+  mutate(
+    arm = recode(
+      arm,
+      con = "Control",
+      exp = "Experimental"
+    )
+  ) %>%
+  unnest(cols = data) %>%
+  pivot_longer(
+    cols = starts_with("week_"),
+    names_to = "week",
+    names_prefix = "week_",
+    names_transform = list(week = as.integer),
+    values_to = "observation"
+  ) %>%
+  select(participant_id, arm, subject_id, week, observation)
+
+study_tidy %>%
+  slice_head(n = 8) %>%
+  knitr::kable(digits = 2)
+```
+
+```{r study-spaghetti-plot}
+ggplot(
+  study_tidy,
+  aes(
+    x = week,
+    y = observation,
+    group = participant_id,
+    color = arm
+  )
+) +
+  geom_line(alpha = 0.7, linewidth = 0.7) +
+  geom_point(alpha = 0.7, size = 1.3) +
+  facet_wrap(~ arm) +
+  scale_x_continuous(breaks = 1:8) +
+  scale_color_manual(
+    values = c(
+      "Control" = "#2C7FB8",
+      "Experimental" = "#D95F0E"
+    )
+  ) +
+  labs(
+    title = "Individual trajectories over eight weeks",
+    x = "Week",
+    y = "Observation"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+```
+
+Each line represents one participant's observations over eight weeks. The control group shows fluctuations over time without a clear overall upward trend. In the experimental group, observations generally increase over time and are higher than those in the control group during the later weeks. Both groups show differences between participants and week-to-week variation.
 
 # Problem 3
