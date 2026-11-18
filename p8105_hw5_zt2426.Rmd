@@ -156,3 +156,133 @@ ggplot(
 Each line represents one participant's observations over eight weeks. The control group shows fluctuations over time without a clear overall upward trend. In the experimental group, observations generally increase over time and are higher than those in the control group during the later weeks. Both groups show differences between participants and week-to-week variation.
 
 # Problem 3
+
+```{r t-test-function}
+simulate_t_test <- function(true_mu) {
+  simulated_data <- rnorm(
+    n = 30,
+    mean = true_mu,
+    sd = 5
+  )
+  
+  t.test(
+    simulated_data,
+    mu = 0,
+    alternative = "two.sided"
+  ) %>%
+    broom::tidy() %>%
+    select(estimate, p.value)
+}
+```
+
+```{r t-test-simulation}
+set.seed(123)
+
+simulation_results <- expand_grid(
+  true_mu = 0:6,
+  iteration = 1:5000
+) %>%
+  mutate(
+    results = map(true_mu, simulate_t_test)
+  ) %>%
+  unnest(cols = results) %>%
+  mutate(
+    reject_null = p.value < 0.05
+  )
+```
+
+```{r t-test-summaries}
+power_summary <- simulation_results %>%
+  group_by(true_mu) %>%
+  summarise(
+    rejection_rate = mean(reject_null),
+    .groups = "drop"
+  )
+
+estimate_summary <- simulation_results %>%
+  group_by(true_mu) %>%
+  summarise(
+    all_samples = mean(estimate),
+    rejected_samples = mean(estimate[reject_null]),
+    .groups = "drop"
+  )
+
+knitr::kable(power_summary, digits = 3)
+
+knitr::kable(estimate_summary, digits = 3)
+```
+```{r power-plot}
+ggplot(
+  power_summary,
+  aes(x = true_mu, y = rejection_rate)
+) +
+  geom_line(color = "#2C7FB8", linewidth = 0.8) +
+  geom_point(color = "#2C7FB8", size = 2) +
+  scale_x_continuous(breaks = 0:6) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    limits = c(0, 1)
+  ) +
+  labs(
+    title = "Rejection probability of a one-sample t-test",
+    x = "True mean (mu)",
+    y = "Rejection proportion"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+When the true mean is zero, the rejection rate is about 4.5%, which is close to the nominal significance level of 5%. For positive true means, power increases as the true mean moves farther from zero. With the sample size and standard deviation held fixed, larger effects are easier to detect. Power is close to 100% when the true mean is 5 or 6.
+
+```{r mean-estimate-plot}
+estimate_plot_data <- estimate_summary %>%
+  pivot_longer(
+    cols = c(all_samples, rejected_samples),
+    names_to = "sample_type",
+    values_to = "mean_estimate"
+  ) %>%
+  mutate(
+    sample_type = recode(
+      sample_type,
+      all_samples = "All samples",
+      rejected_samples = "Rejected samples"
+    )
+  )
+
+ggplot(
+  estimate_plot_data,
+  aes(
+    x = true_mu,
+    y = mean_estimate,
+    color = sample_type
+  )
+) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed",
+    color = "grey50"
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 0:6) +
+  scale_color_manual(
+    values = c(
+      "All samples" = "#2C7FB8",
+      "Rejected samples" = "#D95F0E"
+    )
+  ) +
+  labs(
+    title = "Average mean estimates across simulations",
+    x = "True mean (mu)",
+    y = "Average estimated mean",
+    color = "Samples"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+```
+
+The average estimated mean across all samples is close to the true mean. However, when only samples that reject the null hypothesis are included, the average estimate is too high for small positive true means, especially 1 and 2. Samples with larger estimated effects are more likely to produce significant results, so selecting only significant results creates selection bias.
+
+As the true mean increases, almost all samples reject the null hypothesis, and the two averages become similar. At a true mean of zero, significant estimates can be either positive or negative. Their average is centered at zero in theory, although it can differ from zero in a finite simulation.
+
+
