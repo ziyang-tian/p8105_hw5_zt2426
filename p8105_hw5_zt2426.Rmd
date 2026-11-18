@@ -12,9 +12,62 @@ knitr::opts_chunk$set(
   fig.width = 7,
   fig.height = 4
 )
+library(tidyverse)
 ```
 
 # Problem 1
+```{r birthday-function}
+birthday_match <- function(n_people) {
+  birthdays <- sample(1:365, size = n_people, replace = TRUE)
+  
+  any(duplicated(birthdays))
+}
+```
+```{r birthday-simulation}
+set.seed(123)
+
+birthday_results <- tibble(
+  group_size = 2:50
+) %>%
+  mutate(
+    probability = map_dbl(
+      group_size,
+      function(n_people) {
+        mean(replicate(10000, birthday_match(n_people)))
+      }
+    )
+  )
+
+birthday_results %>%
+  filter(group_size %in% c(2, 23, 50)) %>%
+  knitr::kable(digits = 3)
+```
+```{r birthday-plot}
+ggplot(birthday_results, aes(x = group_size, y = probability)) +
+  geom_line(color = "#2C7FB8", linewidth = 0.8) +
+  geom_point(color = "#2C7FB8", size = 1.5) +
+  geom_hline(
+    yintercept = 0.5,
+    linetype = "dashed",
+    color = "grey50"
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    limits = c(0, 1)
+  ) +
+  labs(
+    title = "Probability of a shared birthday",
+    x = "Number of people",
+    y = "Estimated probability"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+The estimated probability of at least two people sharing a birthday
+increases as the group size increases. It is about 51% for a group
+of 23 people and about 97% for a group of 50 people. Larger groups
+contain more pairs of people, which creates more opportunities
+for a shared birthday.
 
 # Problem 2
 
